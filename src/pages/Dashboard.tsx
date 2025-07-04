@@ -1,436 +1,364 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { User, Session } from '@supabase/supabase-js';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
+import { Card } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
-import { Church, Users, User as UserIcon, Settings, Bell, Calendar } from 'lucide-react';
-import CreateChurchDialog from '@/components/CreateChurchDialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
-interface UserRole {
-  role: 'master' | 'admin' | 'leader' | 'collaborator' | 'member';
-  church_id?: string;
-}
+import { 
+  Loader2, 
+  Church, 
+  LogOut, 
+  Mail, 
+  Users, 
+  Calendar, 
+  Music, 
+  Building,
+  Plus
+} from 'lucide-react';
+import { CreateChurchDialog } from '@/components/create-church-dialog';
 
 interface Church {
   id: string;
   name: string;
-  address?: string;
-  phone?: string;
-  email?: string;
 }
 
 const Dashboard = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [user, setUser] = useState(null);
   const [userChurch, setUserChurch] = useState<Church | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showCreateChurch, setShowCreateChurch] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      // Set up auth state listener
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
-          setSession(session);
-          setUser(session?.user ?? null);
-          
-          if (session?.user) {
-            await fetchUserRole(session.user.id);
-          } else {
-            setUserRole(null);
-            setUserChurch(null);
-          }
-          setLoading(false);
+    const fetchUser = async () => {
+      try {
+        setLoading(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setUser(user);
+          await fetchChurch(user.id);
+        } else {
+          navigate('/login');
         }
-      );
-
-      // Check for existing session
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setSession(session);
-        setUser(session.user);
-        await fetchUserRole(session.user.id);
+      } catch (error) {
+        console.error("Erro ao buscar usuário:", error);
+        toast({
+          title: "Erro",
+          description: "Falha ao buscar informações do usuário.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-
-      return () => subscription.unsubscribe();
     };
 
-    initializeAuth();
-  }, []);
+    fetchUser();
+  }, [navigate]);
 
-  const fetchUserRole = async (userId: string) => {
+  const fetchChurch = async (userId: string) => {
     try {
-      const { data: roles, error } = await supabase
-        .from('user_roles')
-        .select('role, church_id')
+      const { data: churchData, error: churchError } = await supabase
+        .from('user_churches')
+        .select('church_id, role')
         .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (error) {
-        console.error('Error fetching user role:', error);
-        return;
-      }
-
-      if (roles && roles.length > 0) {
-        setUserRole(roles[0]);
-        
-        if (roles[0].church_id) {
-          await fetchChurchData(roles[0].church_id);
-        }
-      }
-    } catch (error) {
-      console.error('Error in fetchUserRole:', error);
-    }
-  };
-
-  const fetchChurchData = async (churchId: string) => {
-    try {
-      const { data: church, error } = await supabase
-        .from('churches')
-        .select('*')
-        .eq('id', churchId)
         .single();
 
-      if (error) {
-        console.error('Error fetching church data:', error);
+      if (churchError) {
+        console.error("Erro ao buscar igreja do usuário:", churchError);
         return;
       }
 
-      setUserChurch(church);
+      if (churchData) {
+        setUserRole(churchData.role);
+        const { data: church, error: getChurchError } = await supabase
+          .from('churches')
+          .select('*')
+          .eq('id', churchData.church_id)
+          .single();
+
+        if (getChurchError) {
+          console.error("Erro ao buscar detalhes da igreja:", getChurchError);
+          return;
+        }
+
+        setUserChurch(church);
+      }
     } catch (error) {
-      console.error('Error in fetchChurchData:', error);
+      console.error("Erro ao buscar dados da igreja:", error);
     }
   };
 
   const handleLogout = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        toast({
-          title: "Erro ao sair",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else {
-        navigate('/login');
-      }
+      await supabase.auth.signOut();
+      navigate('/login');
     } catch (error) {
       toast({
-        title: "Erro inesperado",
-        description: "Tente novamente.",
+        title: "Erro ao sair",
+        description: "Não foi possível fazer logout.",
         variant: "destructive",
       });
     }
   };
 
-  const getRoleDisplay = (role: string) => {
-    const roleMap = {
-      master: 'Master Admin',
-      admin: 'Admin Igreja',
-      leader: 'Líder',
-      collaborator: 'Colaborador',
-      member: 'Membro'
-    };
-    return roleMap[role as keyof typeof roleMap] || role;
+  const handleChurchCreated = (church: Church) => {
+    setUserChurch(church);
   };
 
-  const getRoleBadgeVariant = (role: string) => {
-    switch (role) {
-      case 'master':
-        return 'destructive';
-      case 'admin':
-        return 'default';
-      case 'leader':
-        return 'secondary';
-      default:
-        return 'outline';
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Church className="h-12 w-12 animate-pulse mx-auto mb-4 text-blue-600" />
-          <p>Carregando...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    navigate('/login');
-    return null;
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-50">
+  const renderLobbyView = () => (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
-      <div className="bg-white border-b">
+      <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
+          <div className="flex flex-col sm:flex-row justify-between items-center py-4 gap-4">
+            <div className="flex items-center gap-3">
               <Church className="h-8 w-8 text-blue-600" />
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Igreja Unida</h1>
-                <p className="text-sm text-gray-500">Sistema de Gestão</p>
-              </div>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Igreja Unida</h1>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">{user.email}</p>
-                {userRole && (
-                  <Badge variant={getRoleBadgeVariant(userRole.role)}>
-                    {getRoleDisplay(userRole.role)}
-                  </Badge>
-                )}
-              </div>
-              <Button onClick={handleLogout} variant="outline">
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <span className="text-sm text-gray-600 text-center sm:text-left">
+                Olá, <span className="font-semibold text-gray-900">{user?.user_metadata?.name || user?.email}</span>
+              </span>
+              <Button 
+                onClick={handleLogout} 
+                variant="outline" 
+                size="sm"
+                className="w-full sm:w-auto"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
                 Sair
               </Button>
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {!userRole || (!userChurch && userRole.role !== 'master') ? (
-          // Lobby - usuário sem igreja
-          <div className="text-center py-12">
-            <Church className="h-24 w-24 mx-auto mb-6 text-gray-400" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Bem-vindo ao Sistema
-            </h2>
-            <p className="text-gray-600 mb-8 max-w-md mx-auto">
-              Você está no lobby do sistema. Para acessar uma igreja, você precisa ser convidado por um administrador ou criar uma nova igreja.
-            </p>
-            
-            {userRole?.role === 'master' && (
-              <Button onClick={() => setShowCreateChurch(true)} size="lg">
-                <Church className="mr-2 h-5 w-5" />
-                Criar Nova Igreja
-              </Button>
-            )}
-            
-            <Card className="max-w-2xl mx-auto mt-8">
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Bell className="mr-2 h-5 w-5" />
-                  Notícias do Sistema
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <h3 className="font-semibold text-blue-900">Sistema Atualizado</h3>
-                  <p className="text-blue-800 text-sm">
-                    Nova versão com melhorias na gestão de escalas e repertórios.
-                  </p>
-                </div>
-                <div className="p-4 bg-green-50 rounded-lg">
-                  <h3 className="font-semibold text-green-900">Bem-vindo!</h3>
-                  <p className="text-green-800 text-sm">
-                    Aguarde o convite de uma igreja para começar a usar o sistema.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        ) : (
-          // Dashboard principal - usuário com igreja
-          <div>
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-              {userChurch && (
-                <p className="text-gray-600 mt-2">
-                  {userChurch.name} • {getRoleDisplay(userRole.role)}
-                </p>
-              )}
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        <div className="text-center mb-8 sm:mb-12">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">
+            Bem-vindo ao Sistema
+          </h2>
+          <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto">
+            Você ainda não está vinculado a nenhuma igreja. Para acessar o sistema completo, 
+            você precisa receber um convite de uma igreja ou criar uma nova igreja.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 mb-8 sm:mb-12">
+          <Card className="p-6 sm:p-8 text-center hover:shadow-lg transition-shadow">
+            <div className="mb-4 sm:mb-6">
+              <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                <Mail className="h-8 w-8 text-blue-600" />
+              </div>
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">
+                Aguardar Convite
+              </h3>
+              <p className="text-sm sm:text-base text-gray-600">
+                Aguarde receber um convite por email de uma igreja já cadastrada no sistema.
+              </p>
             </div>
+          </Card>
 
-            <Tabs defaultValue="overview" className="space-y-6">
-              <TabsList>
-                <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-                <TabsTrigger value="members">Membros</TabsTrigger>
-                <TabsTrigger value="departments">Departamentos</TabsTrigger>
-                <TabsTrigger value="scales">Escalas</TabsTrigger>
-                <TabsTrigger value="songs">Músicas</TabsTrigger>
-                {(userRole.role === 'master' || userRole.role === 'admin') && (
-                  <TabsTrigger value="settings">Configurações</TabsTrigger>
-                )}
-              </TabsList>
+          <Card className="p-6 sm:p-8 text-center hover:shadow-lg transition-shadow">
+            <div className="mb-4 sm:mb-6">
+              <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <Plus className="h-8 w-8 text-green-600" />
+              </div>
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">
+                Criar Nova Igreja
+              </h3>
+              <p className="text-sm sm:text-base text-gray-600">
+                Crie uma nova igreja e torne-se o administrador principal.
+              </p>
+            </div>
+            <CreateChurchDialog onChurchCreated={handleChurchCreated} />
+          </Card>
+        </div>
 
-              <TabsContent value="overview">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Membros</CardTitle>
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">0</div>
-                      <p className="text-xs text-muted-foreground">
-                        Total de membros
-                      </p>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Departamentos</CardTitle>
-                      <UserIcon className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">0</div>
-                      <p className="text-xs text-muted-foreground">
-                        Departamentos ativos
-                      </p>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Escalas</CardTitle>
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">0</div>
-                      <p className="text-xs text-muted-foreground">
-                        Escalas este mês
-                      </p>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Músicas</CardTitle>
-                      <Settings className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">0</div>
-                      <p className="text-xs text-muted-foreground">
-                        No repertório
-                      </p>
-                    </CardContent>
-                  </Card>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="members">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Gestão de Membros</CardTitle>
-                    <CardDescription>
-                      Gerencie os membros da igreja
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-center text-gray-500 py-8">
-                      Funcionalidade em desenvolvimento
-                    </p>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="departments">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Departamentos</CardTitle>
-                    <CardDescription>
-                      Gerencie os departamentos e subdepartamentos
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-center text-gray-500 py-8">
-                      Funcionalidade em desenvolvimento
-                    </p>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="scales">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Escalas</CardTitle>
-                    <CardDescription>
-                      Gerencie as escalas de louvor e outros departamentos
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-center text-gray-500 py-8">
-                      Funcionalidade em desenvolvimento
-                    </p>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="songs">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Músicas e Repertórios</CardTitle>
-                    <CardDescription>
-                      Gerencie as músicas e repertórios da igreja
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-center text-gray-500 py-8">
-                      Funcionalidade em desenvolvimento
-                    </p>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              {(userRole.role === 'master' || userRole.role === 'admin') && (
-                <TabsContent value="settings">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Configurações</CardTitle>
-                      <CardDescription>
-                        Configurações da igreja e do sistema
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {userRole.role === 'master' && (
-                          <Button onClick={() => setShowCreateChurch(true)}>
-                            <Church className="mr-2 h-4 w-4" />
-                            Criar Nova Igreja
-                          </Button>
-                        )}
-                        <p className="text-center text-gray-500 py-4">
-                          Mais configurações em desenvolvimento
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-              )}
-            </Tabs>
-          </div>
-        )}
-      </div>
-
-      {/* Create Church Dialog */}
-      <CreateChurchDialog 
-        open={showCreateChurch} 
-        onOpenChange={setShowCreateChurch}
-        onChurchCreated={() => {
-          setShowCreateChurch(false);
-          window.location.reload(); // Refresh to load new church data
-        }}
-      />
+        {/* Info Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+          <Card className="p-4 sm:p-6 text-center bg-blue-50 border-blue-200">
+            <Users className="h-8 w-8 text-blue-600 mx-auto mb-3" />
+            <h4 className="font-semibold text-gray-900 mb-2">Gestão de Membros</h4>
+            <p className="text-sm text-gray-600">
+              Organize e gerencie todos os membros da sua igreja
+            </p>
+          </Card>
+          
+          <Card className="p-4 sm:p-6 text-center bg-green-50 border-green-200">
+            <Calendar className="h-8 w-8 text-green-600 mx-auto mb-3" />
+            <h4 className="font-semibold text-gray-900 mb-2">Escalas e Eventos</h4>
+            <p className="text-sm text-gray-600">
+              Organize escalas de louvor e eventos da igreja
+            </p>
+          </Card>
+          
+          <Card className="p-4 sm:p-6 text-center bg-purple-50 border-purple-200">
+            <Music className="h-8 w-8 text-purple-600 mx-auto mb-3" />
+            <h4 className="font-semibold text-gray-900 mb-2">Repertório Musical</h4>
+            <p className="text-sm text-gray-600">
+              Gerencie músicas e repertórios do ministério
+            </p>
+          </Card>
+        </div>
+      </main>
     </div>
   );
+
+  const renderChurchDashboard = () => (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row justify-between items-center py-4 gap-4">
+            <div className="flex items-center gap-3">
+              <Church className="h-8 w-8 text-blue-600" />
+              <div className="text-center sm:text-left">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{userChurch?.name}</h1>
+                <p className="text-sm text-gray-600">
+                  {userRole === 'admin' ? 'Administrador' : 
+                   userRole === 'leader' ? 'Líder' : 
+                   userRole === 'collaborator' ? 'Colaborador' : 'Membro'}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <span className="text-sm text-gray-600 text-center sm:text-left">
+                Olá, <span className="font-semibold text-gray-900">{user?.user_metadata?.name || user?.email}</span>
+              </span>
+              <Button 
+                onClick={handleLogout} 
+                variant="outline" 
+                size="sm"
+                className="w-full sm:w-auto"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sair
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="mb-6 sm:mb-8">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Dashboard</h2>
+          <p className="text-sm sm:text-base text-gray-600">
+            Gerencie as atividades da sua igreja de forma eficiente
+          </p>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <Card className="p-4 sm:p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-blue-100 rounded-full">
+                <Users className="h-6 w-6 text-blue-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm text-gray-600">Membros</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900">0</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-4 sm:p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-green-100 rounded-full">
+                <Calendar className="h-6 w-6 text-green-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm text-gray-600">Eventos</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900">0</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-4 sm:p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-purple-100 rounded-full">
+                <Music className="h-6 w-6 text-purple-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm text-gray-600">Músicas</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900">0</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-4 sm:p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-orange-100 rounded-full">
+                <Building className="h-6 w-6 text-orange-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm text-gray-600">Departamentos</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900">0</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
+          <Card className="p-6 sm:p-8">
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Ações Rápidas</h3>
+            <div className="space-y-3">
+              <Button variant="outline" className="w-full justify-start h-auto p-4">
+                <Plus className="h-5 w-5 mr-3" />
+                <div className="text-left">
+                  <div className="font-medium">Adicionar Membro</div>
+                  <div className="text-sm text-gray-500">Cadastrar novo membro da igreja</div>
+                </div>
+              </Button>
+              
+              <Button variant="outline" className="w-full justify-start h-auto p-4">
+                <Calendar className="h-5 w-5 mr-3" />
+                <div className="text-left">
+                  <div className="font-medium">Criar Evento</div>
+                  <div className="text-sm text-gray-500">Organizar novo evento ou culto</div>
+                </div>
+              </Button>
+              
+              <Button variant="outline" className="w-full justify-start h-auto p-4">
+                <Music className="h-5 w-5 mr-3" />
+                <div className="text-left">
+                  <div className="font-medium">Gerenciar Músicas</div>
+                  <div className="text-sm text-gray-500">Adicionar músicas ao repertório</div>
+                </div>
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="p-6 sm:p-8">
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Atividades Recentes</h3>
+            <div className="space-y-4">
+              <div className="text-center py-8">
+                <div className="text-gray-400 mb-2">
+                  <Calendar className="h-12 w-12 mx-auto" />
+                </div>
+                <p className="text-gray-500">Nenhuma atividade recente</p>
+                <p className="text-sm text-gray-400">As atividades aparecerão aqui</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </main>
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="mr-2 h-8 w-8 animate-spin" />
+        Carregando...
+      </div>
+    );
+  }
+
+  return userChurch ? renderChurchDashboard() : renderLobbyView();
 };
 
 export default Dashboard;
