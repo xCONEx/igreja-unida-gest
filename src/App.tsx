@@ -2,14 +2,15 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
-import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { User } from '@supabase/supabase-js';
+
+// Context
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
 // Pages
 import LandingPage from '@/pages/LandingPage';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
+import AdminMasterDashboard from '@/pages/AdminMasterDashboard';
 import Teams from '@/pages/Teams';
 import Members from '@/pages/Members';
 import Events from '@/pages/Events';
@@ -21,56 +22,130 @@ import LoadingScreen from '@/components/LoadingScreen';
 
 const queryClient = new QueryClient();
 
-function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+// Componente para rotas protegidas
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isLoading } = useAuth();
 
-  useEffect(() => {
-    // Get initial user
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      setLoading(false);
-    };
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
 
-    getUser();
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+  return <>{children}</>;
+};
 
-    return () => subscription.unsubscribe();
-  }, []);
+// Componente para rotas do admin master
+const AdminMasterRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isAdminMaster, isLoading } = useAuth();
 
-  if (loading) {
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+
+  if (!isAdminMaster) {
+    return <Navigate to="/dashboard" />;
+  }
+
+  return <>{children}</>;
+};
+
+function AppRoutes() {
+  const { user, isAdminMaster, isLoading } = useAuth();
+
+  if (isLoading) {
     return <LoadingScreen />;
   }
 
   return (
+    <Router>
+      <div className="min-h-screen bg-gray-50">
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/dashboard" />} />
+          <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
+          
+          {/* Admin Master Routes */}
+          <Route 
+            path="/admin" 
+            element={
+              <AdminMasterRoute>
+                <AdminMasterDashboard />
+              </AdminMasterRoute>
+            } 
+          />
+          
+          {/* Protected Routes */}
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                {isAdminMaster ? <AdminMasterDashboard /> : <Dashboard />}
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/teams" 
+            element={
+              <ProtectedRoute>
+                <Teams />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/members" 
+            element={
+              <ProtectedRoute>
+                <Members />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/events" 
+            element={
+              <ProtectedRoute>
+                <Events />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/music" 
+            element={
+              <ProtectedRoute>
+                <Music />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/settings" 
+            element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Catch all */}
+          <Route path="*" element={<Navigate to={user ? "/dashboard" : "/"} />} />
+        </Routes>
+        <Toaster />
+      </div>
+    </Router>
+  );
+}
+
+function App() {
+  return (
     <QueryClientProvider client={queryClient}>
-      <Router>
-        <div className="min-h-screen bg-gray-50">
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/dashboard" />} />
-            <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
-            
-            {/* Protected Routes */}
-            <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/login" />} />
-            <Route path="/teams" element={user ? <Teams /> : <Navigate to="/login" />} />
-            <Route path="/members" element={user ? <Members /> : <Navigate to="/login" />} />
-            <Route path="/events" element={user ? <Events /> : <Navigate to="/login" />} />
-            <Route path="/music" element={user ? <Music /> : <Navigate to="/login" />} />
-            <Route path="/settings" element={user ? <Settings /> : <Navigate to="/login" />} />
-            
-            {/* Catch all */}
-            <Route path="*" element={<Navigate to={user ? "/dashboard" : "/"} />} />
-          </Routes>
-          <Toaster />
-        </div>
-      </Router>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
