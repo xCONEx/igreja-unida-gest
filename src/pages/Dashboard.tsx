@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,7 +16,7 @@ import {
   Building,
   Plus
 } from 'lucide-react';
-import { CreateChurchDialog } from '@/components/create-church-dialog';
+import CreateChurchDialog from '@/components/CreateChurchDialog';
 
 interface Church {
   id: string;
@@ -27,6 +28,7 @@ const Dashboard = () => {
   const [userChurch, setUserChurch] = useState<Church | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -57,23 +59,24 @@ const Dashboard = () => {
 
   const fetchChurch = async (userId: string) => {
     try {
-      const { data: churchData, error: churchError } = await supabase
-        .from('user_churches')
+      const { data: userRoleData, error: roleError } = await supabase
+        .from('user_roles')
         .select('church_id, role')
         .eq('user_id', userId)
+        .not('church_id', 'is', null)
         .single();
 
-      if (churchError) {
-        console.error("Erro ao buscar igreja do usuário:", churchError);
+      if (roleError) {
+        console.error("Erro ao buscar role do usuário:", roleError);
         return;
       }
 
-      if (churchData) {
-        setUserRole(churchData.role);
+      if (userRoleData && userRoleData.church_id) {
+        setUserRole(userRoleData.role);
         const { data: church, error: getChurchError } = await supabase
           .from('churches')
           .select('*')
-          .eq('id', churchData.church_id)
+          .eq('id', userRoleData.church_id)
           .single();
 
         if (getChurchError) {
@@ -101,8 +104,12 @@ const Dashboard = () => {
     }
   };
 
-  const handleChurchCreated = (church: Church) => {
-    setUserChurch(church);
+  const handleChurchCreated = () => {
+    setShowCreateDialog(false);
+    // Refresh user data to get the new church
+    if (user) {
+      fetchChurch(user.id);
+    }
   };
 
   const renderLobbyView = () => (
@@ -172,7 +179,12 @@ const Dashboard = () => {
                 Crie uma nova igreja e torne-se o administrador principal.
               </p>
             </div>
-            <CreateChurchDialog onChurchCreated={handleChurchCreated} />
+            <Button 
+              onClick={() => setShowCreateDialog(true)}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              Criar Igreja
+            </Button>
           </Card>
         </div>
 
@@ -203,6 +215,12 @@ const Dashboard = () => {
           </Card>
         </div>
       </main>
+
+      <CreateChurchDialog 
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        onChurchCreated={handleChurchCreated}
+      />
     </div>
   );
 
