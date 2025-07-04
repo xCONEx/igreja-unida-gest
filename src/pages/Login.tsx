@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Church, Mail, ArrowLeft } from 'lucide-react';
+import { Loader2, Church, Mail, ArrowLeft, Music, Users, Calendar } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const Login = () => {
@@ -113,7 +113,7 @@ const Login = () => {
       if (error) {
         if (error.message.includes('already registered')) {
           toast({
-            title: "Usuário já existe",
+            title: "Usuário já exists",
             description: "Este email já está cadastrado. Tente fazer login.",
             variant: "destructive",
           });
@@ -173,23 +173,21 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Header */}
-      <div className="w-full px-4 sm:px-6 py-4">
-        <div className="max-w-md mx-auto flex justify-between items-center">
+    <div className="min-h-screen flex bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* Left Side - Login Form */}
+      <div className="flex-1 flex flex-col justify-center px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="w-full max-w-md mx-auto mb-6">
           <Link 
             to="/" 
-            className="flex items-center gap-2 text-blue-600 hover:text-blue-700 transition-colors"
+            className="flex items-center gap-2 text-blue-600 hover:text-blue-700 transition-colors mb-8"
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="text-sm font-medium">Voltar</span>
           </Link>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center px-4 sm:px-6 py-8">
-        <Card className="w-full max-w-md shadow-2xl border-0">
+        <Card className="w-full max-w-md mx-auto shadow-2xl border-0">
           <CardHeader className="text-center space-y-4 pb-6">
             <div className="flex justify-center">
               <div className="p-3 bg-blue-100 rounded-full">
@@ -198,10 +196,10 @@ const Login = () => {
             </div>
             <div>
               <CardTitle className="text-2xl font-bold text-gray-900">
-                Igreja Unida
+                Church Plan
               </CardTitle>
               <CardDescription className="text-base mt-2">
-                Sistema de Gestão Eclesiástica
+                Gestão Completa para Ministérios Musicais
               </CardDescription>
             </div>
           </CardHeader>
@@ -361,11 +359,63 @@ const Login = () => {
             
             <div className="text-center">
               <p className="text-xs text-gray-500 leading-relaxed">
-                Sistema desenvolvido para gestão eclesiástica segura e eficiente
+                Plataforma desenvolvida especificamente para ministérios musicais
               </p>
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Right Side - Features Showcase */}
+      <div className="hidden lg:flex flex-1 bg-gradient-to-br from-blue-600 to-indigo-700 p-8 items-center justify-center">
+        <div className="max-w-md text-white space-y-8">
+          <div>
+            <h2 className="text-3xl font-bold mb-4">
+              Revolucione seu Ministério Musical
+            </h2>
+            <p className="text-blue-100 text-lg">
+              Gerencie equipes, eventos e repertório de forma profissional e organizada.
+            </p>
+          </div>
+          
+          <div className="space-y-6">
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-blue-500/30 rounded-lg">
+                <Users className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="font-semibold mb-1">Gestão de Equipes</h3>
+                <p className="text-blue-100 text-sm">
+                  Organize suas equipes com posições específicas e controle de acesso granular.
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-blue-500/30 rounded-lg">
+                <Calendar className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="font-semibold mb-1">Planejamento de Eventos</h3>
+                <p className="text-blue-100 text-sm">
+                  Agende cultos, ensaios e eventos especiais com cronograma detalhado.
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-blue-500/30 rounded-lg">
+                <Music className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="font-semibold mb-1">Biblioteca Musical</h3>
+                <p className="text-blue-100 text-sm">
+                  Gerencie seu repertório com letras, cifras e organização por eventos.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
