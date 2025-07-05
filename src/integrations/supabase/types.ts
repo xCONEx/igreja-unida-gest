@@ -425,7 +425,31 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_current_app_user: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          birth_date: string | null
+          can_add_people: boolean
+          can_manage_media: boolean
+          can_organize_events: boolean
+          country_dial_code: string | null
+          created_at: string
+          email: string
+          id: number
+          is_admin: boolean
+          name: string
+          organization_id: number
+          pending: boolean
+          phone_number: string | null
+          profile_url: string | null
+          receive_cancel_event_notification: boolean
+          updated_at: string
+        }
+      }
+      is_admin_master: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
     }
     Enums: {
       event_status_enum: "Scheduled" | "Cancelled" | "Completed" | "Draft"

@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Users, Building2, TrendingUp, Clock, Plus, Settings } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import CreateOrganizationDialog from '@/components/CreateOrganizationDialog';
+import ManageUsersDialog from '@/components/ManageUsersDialog';
+import ViewOrganizationsDialog from '@/components/ViewOrganizationsDialog';
 
 const AdminMasterDashboard = () => {
   const { user, isAdminMaster, logout } = useAuth();
@@ -18,6 +20,8 @@ const AdminMasterDashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [showCreateOrg, setShowCreateOrg] = useState(false);
+  const [showManageUsers, setShowManageUsers] = useState(false);
+  const [showViewOrganizations, setShowViewOrganizations] = useState(false);
 
   const loadStats = async () => {
     if (!isAdminMaster) {
@@ -98,19 +102,19 @@ const AdminMasterDashboard = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Painel Admin Master</h1>
             <p className="text-gray-600 mt-2">
               Bem-vindo, {user?.name}! Gerencie todas as organizações do sistema.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={() => setShowCreateOrg(true)}>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Button onClick={() => setShowCreateOrg(true)} className="w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
               Nova Organização
             </Button>
-            <Button variant="outline" onClick={logout}>
+            <Button variant="outline" onClick={logout} className="w-full sm:w-auto">
               <Settings className="w-4 h-4 mr-2" />
               Sair
             </Button>
@@ -125,7 +129,7 @@ const AdminMasterDashboard = () => {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[...Array(4)].map((_, i) => (
               <Card key={i} className="animate-pulse">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -142,7 +146,7 @@ const AdminMasterDashboard = () => {
         ) : (
           <>
             {/* Cards de Estatísticas */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total de Usuários</CardTitle>
@@ -239,11 +243,19 @@ const AdminMasterDashboard = () => {
                     <Plus className="w-4 h-4 mr-2" />
                     Criar Nova Organização
                   </Button>
-                  <Button className="w-full justify-start" variant="outline">
+                  <Button 
+                    className="w-full justify-start" 
+                    variant="outline"
+                    onClick={() => setShowManageUsers(true)}
+                  >
                     <Users className="w-4 h-4 mr-2" />
                     Gerenciar Usuários
                   </Button>
-                  <Button className="w-full justify-start" variant="outline">
+                  <Button 
+                    className="w-full justify-start" 
+                    variant="outline"
+                    onClick={() => setShowViewOrganizations(true)}
+                  >
                     <Building2 className="w-4 h-4 mr-2" />
                     Ver Todas Organizações
                   </Button>
@@ -254,11 +266,21 @@ const AdminMasterDashboard = () => {
         )}
       </div>
 
-      {/* Dialog para criar organização */}
+      {/* Modals */}
       <CreateOrganizationDialog
         open={showCreateOrg}
         onOpenChange={setShowCreateOrg}
         onOrganizationCreated={handleCreateOrganization}
+      />
+
+      <ManageUsersDialog
+        open={showManageUsers}
+        onOpenChange={setShowManageUsers}
+      />
+
+      <ViewOrganizationsDialog
+        open={showViewOrganizations}
+        onOpenChange={setShowViewOrganizations}
       />
     </div>
   );
