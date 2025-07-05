@@ -1,3 +1,4 @@
+
 import { supabase } from '../client'
 import { Tables, TablesInsert, TablesUpdate } from '../types'
 
@@ -21,6 +22,7 @@ export class UserService {
       .order('created_at', { ascending: false })
 
     if (error) {
+      console.error('Erro ao buscar usuários:', error)
       throw new Error(`Erro ao buscar usuários: ${error.message}`)
     }
 
@@ -40,9 +42,10 @@ export class UserService {
         )
       `)
       .eq('id', id)
-      .single()
+      .maybeSingle()
 
     if (error) {
+      console.error('Erro ao buscar usuário:', error)
       throw new Error(`Erro ao buscar usuário: ${error.message}`)
     }
 
@@ -62,9 +65,10 @@ export class UserService {
         )
       `)
       .eq('email', email)
-      .single()
+      .maybeSingle()
 
     if (error) {
+      console.error('Erro ao buscar usuário por email:', error)
       throw new Error(`Erro ao buscar usuário por email: ${error.message}`)
     }
 
@@ -80,6 +84,7 @@ export class UserService {
       .single()
 
     if (error) {
+      console.error('Erro ao criar usuário:', error)
       throw new Error(`Erro ao criar usuário: ${error.message}`)
     }
 
@@ -96,6 +101,7 @@ export class UserService {
       .single()
 
     if (error) {
+      console.error('Erro ao atualizar usuário:', error)
       throw new Error(`Erro ao atualizar usuário: ${error.message}`)
     }
 
@@ -110,6 +116,7 @@ export class UserService {
       .eq('id', id)
 
     if (error) {
+      console.error('Erro ao deletar usuário:', error)
       throw new Error(`Erro ao deletar usuário: ${error.message}`)
     }
   }
@@ -130,6 +137,7 @@ export class UserService {
       .order('created_at', { ascending: false })
 
     if (error) {
+      console.error('Erro ao buscar usuários da organização:', error)
       throw new Error(`Erro ao buscar usuários da organização: ${error.message}`)
     }
 
@@ -152,6 +160,7 @@ export class UserService {
       .order('created_at', { ascending: false })
 
     if (error) {
+      console.error('Erro ao buscar usuários pendentes:', error)
       throw new Error(`Erro ao buscar usuários pendentes: ${error.message}`)
     }
 
@@ -171,6 +180,7 @@ export class UserService {
       .single()
 
     if (error) {
+      console.error('Erro ao aprovar usuário:', error)
       throw new Error(`Erro ao aprovar usuário: ${error.message}`)
     }
 
@@ -184,6 +194,7 @@ export class UserService {
       .select('pending, is_admin, created_at')
 
     if (error) {
+      console.error('Erro ao buscar estatísticas dos usuários:', error)
       throw new Error(`Erro ao buscar estatísticas dos usuários: ${error.message}`)
     }
 
@@ -201,4 +212,4 @@ export class UserService {
 
     return stats
   }
-} 
+}

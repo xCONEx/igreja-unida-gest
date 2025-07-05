@@ -1,9 +1,7 @@
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { UserService } from '@/integrations/supabase/services/userService';
-import { OrganizationService } from '@/integrations/supabase/services/organizationService';
-import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 
@@ -11,35 +9,26 @@ const AuthCallback = () => {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
-  const { login } = useAuth();
 
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
+        console.log('Processando callback de autenticação...')
+        
         // Obter a sessão do Supabase
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
+          console.error('Erro na sessão:', error)
           throw new Error(error.message);
         }
 
         if (!session?.user) {
+          console.error('Sessão não encontrada')
           throw new Error('Sessão não encontrada');
         }
 
-        const { user } = session;
-        
-        // Buscar usuário na nossa tabela application_users
-        const userData = await UserService.getUserByEmail(user.email!);
-        
-        if (!userData) {
-          // Se o usuário não existe, criar um novo
-          // Por enquanto, vamos redirecionar para login com erro
-          throw new Error('Usuário não encontrado. Entre em contato com o administrador.');
-        }
-
-        // Fazer login com o usuário encontrado
-        await login(user.email!); // Sem senha para login com Google
+        console.log('Usuário autenticado:', session.user.email)
         
         setStatus('success');
         setMessage('Login realizado com sucesso!');
@@ -62,7 +51,7 @@ const AuthCallback = () => {
     };
 
     handleAuthCallback();
-  }, [navigate, login]);
+  }, [navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -118,4 +107,4 @@ const AuthCallback = () => {
   );
 };
 
-export default AuthCallback; 
+export default AuthCallback;

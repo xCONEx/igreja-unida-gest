@@ -1,3 +1,4 @@
+
 import { supabase } from '../client'
 import { Tables, TablesInsert, TablesUpdate } from '../types'
 
@@ -10,17 +11,11 @@ export class OrganizationService {
   static async getAllOrganizations(): Promise<Organization[]> {
     const { data, error } = await supabase
       .from('organizations')
-      .select(`
-        *,
-        application_users!organizations_owner_id_fkey (
-          id,
-          name,
-          email
-        )
-      `)
+      .select('*')
       .order('created_at', { ascending: false })
 
     if (error) {
+      console.error('Erro ao buscar organizações:', error)
       throw new Error(`Erro ao buscar organizações: ${error.message}`)
     }
 
@@ -31,18 +26,12 @@ export class OrganizationService {
   static async getOrganizationById(id: number): Promise<Organization | null> {
     const { data, error } = await supabase
       .from('organizations')
-      .select(`
-        *,
-        application_users!organizations_owner_id_fkey (
-          id,
-          name,
-          email
-        )
-      `)
+      .select('*')
       .eq('id', id)
-      .single()
+      .maybeSingle()
 
     if (error) {
+      console.error('Erro ao buscar organização:', error)
       throw new Error(`Erro ao buscar organização: ${error.message}`)
     }
 
@@ -58,6 +47,7 @@ export class OrganizationService {
       .single()
 
     if (error) {
+      console.error('Erro ao criar organização:', error)
       throw new Error(`Erro ao criar organização: ${error.message}`)
     }
 
@@ -74,6 +64,7 @@ export class OrganizationService {
       .single()
 
     if (error) {
+      console.error('Erro ao atualizar organização:', error)
       throw new Error(`Erro ao atualizar organização: ${error.message}`)
     }
 
@@ -88,49 +79,9 @@ export class OrganizationService {
       .eq('id', id)
 
     if (error) {
+      console.error('Erro ao deletar organização:', error)
       throw new Error(`Erro ao deletar organização: ${error.message}`)
     }
-  }
-
-  // Buscar organizações por plano de assinatura
-  static async getOrganizationsByPlan(plan: 'Free' | 'Basic' | 'Premium'): Promise<Organization[]> {
-    const { data, error } = await supabase
-      .from('organizations')
-      .select(`
-        *,
-        application_users!organizations_owner_id_fkey (
-          id,
-          name,
-          email
-        )
-      `)
-      .eq('subscription_plan', plan)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      throw new Error(`Erro ao buscar organizações por plano: ${error.message}`)
-    }
-
-    return data || []
-  }
-
-  // Atualizar plano de assinatura
-  static async updateSubscriptionPlan(id: number, plan: 'Free' | 'Basic' | 'Premium'): Promise<Organization> {
-    const { data, error } = await supabase
-      .from('organizations')
-      .update({ 
-        subscription_plan: plan,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) {
-      throw new Error(`Erro ao atualizar plano de assinatura: ${error.message}`)
-    }
-
-    return data
   }
 
   // Buscar estatísticas das organizações
@@ -140,16 +91,15 @@ export class OrganizationService {
       .select('subscription_plan, created_at')
 
     if (error) {
-      throw new Error(`Erro ao buscar estatísticas: ${error.message}`)
+      console.error('Erro ao buscar estatísticas das organizações:', error)
+      throw new Error(`Erro ao buscar estatísticas das organizações: ${error.message}`)
     }
 
     const stats = {
       total: organizations?.length || 0,
-      byPlan: {
-        Free: organizations?.filter(org => org.subscription_plan === 'Free').length || 0,
-        Basic: organizations?.filter(org => org.subscription_plan === 'Basic').length || 0,
-        Premium: organizations?.filter(org => org.subscription_plan === 'Premium').length || 0,
-      },
+      active: organizations?.length || 0, // Assumindo que todas são ativas por enquanto
+      free: organizations?.filter(org => org.subscription_plan === 'Free').length || 0,
+      premium: organizations?.filter(org => org.subscription_plan === 'Premium').length || 0,
       recent: organizations?.filter(org => {
         const createdDate = new Date(org.created_at)
         const thirtyDaysAgo = new Date()
@@ -160,4 +110,4 @@ export class OrganizationService {
 
     return stats
   }
-} 
+}

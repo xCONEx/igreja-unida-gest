@@ -1,16 +1,19 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { User } from '@supabase/supabase-js'
+import { supabase } from '../integrations/supabase/client'
 import { UserService, ApplicationUser } from '../integrations/supabase/services/userService'
 import { OrganizationService, Organization } from '../integrations/supabase/services/organizationService'
-import { supabase } from '../integrations/supabase/client'
 
 interface AuthContextType {
   user: ApplicationUser | null
+  supabaseUser: User | null
   organization: Organization | null
   isAdminMaster: boolean
   isLoading: boolean
-  login: (email: string, password?: string) => Promise<void>
+  login: (email: string, password: string) => Promise<void>
   loginWithGoogle: () => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
   refreshUser: () => Promise<void>
 }
 
@@ -22,6 +25,7 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<ApplicationUser | null>(null)
+  const [supabaseUser, setSupabaseUser] = useState<User | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isAdminMaster, setIsAdminMaster] = useState(false)
@@ -32,56 +36,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return adminEmails.includes(email.toLowerCase())
   }
 
-  const login = async (email: string, password?: string) => {
+  const login = async (email: string, password: string) => {
     try {
       setIsLoading(true)
       
-      // Buscar usuário por email
-      const userData = await UserService.getUserByEmail(email)
-      
-      if (!userData) {
-        throw new Error('Usuário não encontrado. Entre em contato com o administrador.')
+      // Login via Supabase Auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+
+      if (error) {
+        throw new Error(error.message)
       }
 
-      // Se for login com senha, verificar se a senha está correta
-      if (password && password !== '') {
-        // Aqui você pode implementar verificação de senha se necessário
-        // Por enquanto, vamos aceitar qualquer senha para usuários existentes
-        console.log('Login com senha para:', email)
+      if (!data.user) {
+        throw new Error('Usuário não encontrado')
       }
 
-      // Verificar se é admin master
-      const isMaster = checkAdminMaster(email)
-      setIsAdminMaster(isMaster)
-
-      if (isMaster) {
-        // Admin master não precisa de organização
-        setUser(userData)
-        setOrganization(null)
-        
-        // Salvar dados no localStorage
-        localStorage.setItem('user', JSON.stringify(userData))
-        localStorage.setItem('isAdminMaster', JSON.stringify(isMaster))
-      } else {
-        // Usuário normal precisa ter organização
-        if (!userData.organization_id) {
-          throw new Error('Usuário não está associado a uma organização')
-        }
-
-        const orgData = await OrganizationService.getOrganizationById(userData.organization_id)
-        if (!orgData) {
-          throw new Error('Organização não encontrada')
-        }
-
-        setUser(userData)
-        setOrganization(orgData)
-        
-        // Salvar dados no localStorage
-        localStorage.setItem('user', JSON.stringify(userData))
-        localStorage.setItem('organization', JSON.stringify(orgData))
-        localStorage.setItem('isAdminMaster', JSON.stringify(isMaster))
-      }
-
+      // O resto será tratado pelo onAuthStateChange
     } catch (error) {
       console.error('Erro no login:', error)
       throw error
@@ -94,7 +67,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true)
       
-      // Iniciar login com Google via Supabase
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -106,9 +78,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error(error.message)
       }
 
-      // O redirecionamento será tratado no callback
       console.log('Login com Google iniciado:', data)
-
     } catch (error) {
       console.error('Erro no login com Google:', error)
       throw error
@@ -117,49 +87,141 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }
 
-  const logout = () => {
-    setUser(null)
-    setOrganization(null)
-    setIsAdminMaster(false)
-    localStorage.removeItem('user')
-    localStorage.removeItem('organization')
-    localStorage.removeItem('isAdminMaster')
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut()
+      setUser(null)
+      setSupabaseUser(null)
+      setOrganization(null)
+      setIsAdminMaster(false)
+    } catch (error) {
+      console.error('Erro no logout:', error)
+    }
+  }
+
+  const loadUserData = async (supabaseUser: User) => {
+    try {
+      console.log('Carregando dados do usuário:', supabaseUser.email)
+      
+      // Verificar se é admin master
+      const isMaster = checkAdminMaster(supabaseUser.email!)
+      setIsAdminMaster(isMaster)
+
+      if (isMaster) {
+        // Admin master não precisa de dados na tabela application_users
+        setUser({
+          id: 0,
+          email: supabaseUser.email!,
+          name: supabaseUser.user_metadata?.full_name || supabaseUser.email!,
+          organization_id: 0,
+          is_admin: true,
+          can_add_people: true,
+          can_organize_events: true,
+          can_manage_media: true,
+          receive_cancel_event_notification: false,
+          pending: false,
+          phone_number: null,
+          birth_date: null,
+          country_dial_code: null,
+          profile_url: supabaseUser.user_metadata?.avatar_url || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        } as ApplicationUser)
+        setOrganization(null)
+      } else {
+        // Usuário normal - buscar dados na tabela
+        try {
+          const userData = await UserService.getUserByEmail(supabaseUser.email!)
+          
+          if (!userData) {
+            // Criar usuário automaticamente se não existe
+            const newUser = await UserService.createUser({
+              email: supabaseUser.email!,
+              name: supabaseUser.user_metadata?.full_name || supabaseUser.email!,
+              organization_id: 1, // Organização padrão - será ajustado
+              profile_url: supabaseUser.user_metadata?.avatar_url || null,
+              pending: true
+            })
+            setUser(newUser)
+          } else {
+            setUser(userData)
+            
+            // Carregar organização se o usuário tiver uma
+            if (userData.organization_id) {
+              const orgData = await OrganizationService.getOrganizationById(userData.organization_id)
+              setOrganization(orgData)
+            }
+          }
+        } catch (error) {
+          console.error('Erro ao carregar dados do usuário:', error)
+          // Se não conseguir carregar, criar usuário básico
+          setUser({
+            id: 0,
+            email: supabaseUser.email!,
+            name: supabaseUser.user_metadata?.full_name || supabaseUser.email!,
+            organization_id: 0,
+            is_admin: false,
+            can_add_people: false,
+            can_organize_events: false,
+            can_manage_media: false,
+            receive_cancel_event_notification: false,
+            pending: true,
+            phone_number: null,
+            birth_date: null,
+            country_dial_code: null,
+            profile_url: supabaseUser.user_metadata?.avatar_url || null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          } as ApplicationUser)
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados do usuário:', error)
+    }
   }
 
   const refreshUser = async () => {
     try {
-      const savedUser = localStorage.getItem('user')
-      const savedOrg = localStorage.getItem('organization')
-      const savedIsMaster = localStorage.getItem('isAdminMaster')
-
-      if (savedUser) {
-        const userData = JSON.parse(savedUser)
-        const isMaster = savedIsMaster ? JSON.parse(savedIsMaster) : false
-
-        setUser(userData)
-        setIsAdminMaster(isMaster)
-
-        if (!isMaster && savedOrg) {
-          const orgData = JSON.parse(savedOrg)
-          setOrganization(orgData)
-        } else {
-          setOrganization(null)
-        }
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        await loadUserData(session.user)
       }
     } catch (error) {
       console.error('Erro ao recarregar usuário:', error)
-      logout()
     } finally {
       setIsLoading(false)
     }
   }
 
+  // Configurar listener para mudanças de autenticação
   useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.email)
+        
+        if (event === 'SIGNED_IN' && session?.user) {
+          setSupabaseUser(session.user)
+          await loadUserData(session.user)
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null)
+          setSupabaseUser(null)
+          setOrganization(null)
+          setIsAdminMaster(false)
+        }
+        
+        setIsLoading(false)
+      }
+    )
+
+    // Verificar sessão inicial
     refreshUser()
+
+    return () => subscription.unsubscribe()
   }, [])
 
   const value: AuthContextType = {
     user,
+    supabaseUser,
     organization,
     isAdminMaster,
     isLoading,
@@ -182,4 +244,4 @@ export const useAuth = () => {
     throw new Error('useAuth deve ser usado dentro de um AuthProvider')
   }
   return context
-} 
+}
