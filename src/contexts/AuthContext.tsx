@@ -54,7 +54,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error('Usuário não encontrado')
       }
 
-      // O resto será tratado pelo onAuthStateChange
+      console.log('Login realizado com sucesso:', data.user.email)
     } catch (error) {
       console.error('Erro no login:', error)
       throw error
@@ -108,11 +108,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsAdminMaster(isMaster)
 
       if (isMaster) {
-        // Admin master não precisa de dados na tabela application_users
+        console.log('Usuário identificado como Admin Master')
+        // Admin master - criar perfil virtual sem salvar no banco
         setUser({
           id: 0,
           email: supabaseUser.email!,
-          name: supabaseUser.user_metadata?.full_name || supabaseUser.email!,
+          name: supabaseUser.user_metadata?.full_name || 'Admin Master',
           organization_id: 0,
           is_admin: true,
           can_add_people: true,
@@ -134,27 +135,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           const userData = await UserService.getUserByEmail(supabaseUser.email!)
           
           if (!userData) {
-            // Criar usuário automaticamente se não existe
-            const newUser = await UserService.createUser({
+            console.log('Usuário não encontrado, será necessário criar organização primeiro')
+            // Usuário não existe - será criado quando criar organização
+            setUser({
+              id: 0,
               email: supabaseUser.email!,
               name: supabaseUser.user_metadata?.full_name || supabaseUser.email!,
-              organization_id: 1, // Organização padrão - será ajustado
+              organization_id: 0,
+              is_admin: false,
+              can_add_people: false,
+              can_organize_events: false,
+              can_manage_media: false,
+              receive_cancel_event_notification: false,
+              pending: true,
+              phone_number: null,
+              birth_date: null,
+              country_dial_code: null,
               profile_url: supabaseUser.user_metadata?.avatar_url || null,
-              pending: true
-            })
-            setUser(newUser)
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            } as ApplicationUser)
           } else {
+            console.log('Dados do usuário carregados:', userData)
             setUser(userData)
             
             // Carregar organização se o usuário tiver uma
-            if (userData.organization_id) {
-              const orgData = await OrganizationService.getOrganizationById(userData.organization_id)
-              setOrganization(orgData)
+            if (userData.organization_id && userData.organization_id > 0) {
+              try {
+                const orgData = await OrganizationService.getOrganizationById(userData.organization_id)
+                setOrganization(orgData)
+                console.log('Organização carregada:', orgData)
+              } catch (error) {
+                console.error('Erro ao carregar organização:', error)
+              }
             }
           }
         } catch (error) {
           console.error('Erro ao carregar dados do usuário:', error)
-          // Se não conseguir carregar, criar usuário básico
+          // Se não conseguir carregar, criar usuário básico para não quebrar a aplicação
           setUser({
             id: 0,
             email: supabaseUser.email!,
@@ -176,7 +194,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       }
     } catch (error) {
-      console.error('Erro ao carregar dados do usuário:', error)
+      console.error('Erro geral ao carregar dados do usuário:', error)
     }
   }
 
@@ -207,6 +225,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setSupabaseUser(null)
           setOrganization(null)
           setIsAdminMaster(false)
+        } else if (event === 'INITIAL_SESSION' && session?.user) {
+          setSupabaseUser(session.user)
+          await loadUserData(session.user)
         }
         
         setIsLoading(false)

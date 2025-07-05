@@ -187,8 +187,9 @@ export class UserService {
     return data
   }
 
-  // Buscar estatísticas dos usuários
+  // Buscar estatísticas dos usuários (protegido para admin masters)
   static async getUserStats() {
+    // Esta função só funciona para admin masters devido às políticas RLS
     const { data: users, error } = await supabase
       .from('application_users')
       .select('pending, is_admin, created_at')
@@ -198,16 +199,25 @@ export class UserService {
       throw new Error(`Erro ao buscar estatísticas dos usuários: ${error.message}`)
     }
 
+    if (!users) {
+      return {
+        total: 0,
+        pending: 0,
+        admins: 0,
+        recent: 0
+      }
+    }
+
     const stats = {
-      total: users?.length || 0,
-      pending: users?.filter(user => user.pending).length || 0,
-      admins: users?.filter(user => user.is_admin).length || 0,
-      recent: users?.filter(user => {
+      total: users.length,
+      pending: users.filter(user => user.pending).length,
+      admins: users.filter(user => user.is_admin).length,
+      recent: users.filter(user => {
         const createdDate = new Date(user.created_at)
         const thirtyDaysAgo = new Date()
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
         return createdDate >= thirtyDaysAgo
-      }).length || 0
+      }).length
     }
 
     return stats

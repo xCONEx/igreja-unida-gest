@@ -1,204 +1,212 @@
-import React, { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { toast } from '@/hooks/use-toast'
-import { OrganizationService } from '@/integrations/supabase/services/organizationService'
-import { UserService } from '@/integrations/supabase/services/userService'
-import { Loader2, Plus } from 'lucide-react'
+
+import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { toast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react';
 
 interface CreateOrganizationDialogProps {
-  onOrganizationCreated: () => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onOrganizationCreated: () => void;
 }
 
-const CreateOrganizationDialog: React.FC<CreateOrganizationDialogProps> = ({ onOrganizationCreated }) => {
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
+const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }: CreateOrganizationDialogProps) => {
   const [formData, setFormData] = useState({
-    organizationName: '',
-    ownerName: '',
-    ownerEmail: '',
-    subscriptionPlan: 'Free' as 'Free' | 'Basic' | 'Premium',
-    maxUsers: 15,
-    maxStorageGB: 0.5
-  })
+    name: '',
+    subscription_plan: 'Free' as 'Free' | 'Basic' | 'Premium',
+    max_users: 15,
+    max_storage_gb: 0.5,
+  });
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     
-    if (!formData.organizationName || !formData.ownerName || !formData.ownerEmail) {
+    if (!formData.name) {
       toast({
-        title: "Erro",
-        description: "Por favor, preencha todos os campos obrigatórios.",
+        title: "Campo obrigatório",
+        description: "Nome da organização é obrigatório.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
-    setLoading(true)
+    setLoading(true);
+    
     try {
-      // Primeiro, criar o usuário proprietário
-      const user = await UserService.createUser({
-        email: formData.ownerEmail,
-        name: formData.ownerName,
-        organization_id: 0, // Será atualizado após criar a organização
-        is_admin: true,
-        can_add_people: true,
-        can_organize_events: true,
-        can_manage_media: true,
-        receive_cancel_event_notification: true,
-        pending: false
-      })
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Usuário não autenticado');
+      }
 
-      // Depois, criar a organização
-      const organization = await OrganizationService.createOrganization({
-        name: formData.organizationName,
-        owner_id: user.id,
-        subscription_plan: formData.subscriptionPlan,
-        max_users: formData.maxUsers,
-        max_storage_gb: formData.maxStorageGB
-      })
+      // Criar a organização primeiro (com owner_id temporário)
+      const { data: organization, error: orgError } = await supabase
+        .from('organizations')
+        .insert({
+          name: formData.name,
+          owner_id: 1, // Temporário, será atualizado depois
+          subscription_plan: formData.subscription_plan,
+          max_users: formData.max_users,
+          max_storage_gb: formData.max_storage_gb,
+        })
+        .select()
+        .single();
 
-      // Atualizar o usuário com o ID da organização
-      await UserService.updateUser(user.id, {
-        organization_id: organization.id
-      })
+      if (orgError) {
+        throw orgError;
+      }
+
+      // Criar o usuário admin na tabela application_users
+      const { data: appUser, error: userError } = await supabase
+        .from('application_users')
+        .insert({
+          email: user.email!,
+          name: user.user_metadata?.full_name || user.email!,
+          organization_id: organization.id,
+          is_admin: true,
+          can_add_people: true,
+          can_organize_events: true,
+          can_manage_media: true,
+          pending: false,
+          profile_url: user.user_metadata?.avatar_url || null,
+        })
+        .select()
+        .single();
+
+      if (userError) {
+        throw userError;
+      }
+
+      // Atualizar a organização com o owner_id correto
+      const { error: updateError } = await supabase
+        .from('organizations')
+        .update({ owner_id: appUser.id })
+        .eq('id', organization.id);
+
+      if (updateError) {
+        console.warn('Erro ao atualizar owner:', updateError);
+      }
 
       toast({
         title: "Organização criada com sucesso!",
-        description: `A organização "${formData.organizationName}" foi criada e o proprietário foi notificado.`,
-      })
+        description: `${organization.name} foi criada e você é o administrador.`,
+      });
 
       setFormData({
-        organizationName: '',
-        ownerName: '',
-        ownerEmail: '',
-        subscriptionPlan: 'Free',
-        maxUsers: 15,
-        maxStorageGB: 0.5
-      })
+        name: '',
+        subscription_plan: 'Free',
+        max_users: 15,
+        max_storage_gb: 0.5,
+      });
 
-      setOpen(false)
-      onOrganizationCreated()
-
+      onOrganizationCreated();
+      
     } catch (error: any) {
+      console.error('Erro ao criar organização:', error);
       toast({
         title: "Erro ao criar organização",
         description: error.message || "Tente novamente mais tarde.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleInputChange = (field: string, value: string | number) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
-    }))
-  }
+    }));
+  };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Criar Organização
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Criar Nova Organização</DialogTitle>
           <DialogDescription>
-            Crie uma nova organização e defina o proprietário. Preencha todos os campos obrigatórios.
+            Preencha os dados da nova organização. Você será o administrador.
           </DialogDescription>
         </DialogHeader>
+        
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="organizationName">Nome da Organização *</Label>
+            <Label htmlFor="org-name">Nome da Organização *</Label>
             <Input
-              id="organizationName"
-              value={formData.organizationName}
-              onChange={(e) => handleInputChange('organizationName', e.target.value)}
-              placeholder="Ex: Igreja Batista Central"
-              required
+              id="org-name"
+              value={formData.name}
+              onChange={(e) => handleInputChange('name', e.target.value)}
+              placeholder="Nome da organização"
+              disabled={loading}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="ownerName">Nome do Proprietário *</Label>
-            <Input
-              id="ownerName"
-              value={formData.ownerName}
-              onChange={(e) => handleInputChange('ownerName', e.target.value)}
-              placeholder="Ex: João Silva"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="ownerEmail">Email do Proprietário *</Label>
-            <Input
-              id="ownerEmail"
-              type="email"
-              value={formData.ownerEmail}
-              onChange={(e) => handleInputChange('ownerEmail', e.target.value)}
-              placeholder="joao@igreja.com"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="subscriptionPlan">Plano de Assinatura</Label>
-            <Select
-              value={formData.subscriptionPlan}
-              onValueChange={(value) => handleInputChange('subscriptionPlan', value)}
+            <Label htmlFor="subscription-plan">Plano de Assinatura</Label>
+            <Select 
+              value={formData.subscription_plan} 
+              onValueChange={(value) => handleInputChange('subscription_plan', value)}
+              disabled={loading}
             >
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue placeholder="Selecione o plano" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Free">Free (15 usuários, 0.5GB)</SelectItem>
-                <SelectItem value="Basic">Basic (50 usuários, 5GB)</SelectItem>
-                <SelectItem value="Premium">Premium (200 usuários, 20GB)</SelectItem>
+                <SelectItem value="Free">Gratuito</SelectItem>
+                <SelectItem value="Basic">Básico</SelectItem>
+                <SelectItem value="Premium">Premium</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="maxUsers">Usuários Máximos</Label>
+              <Label htmlFor="max-users">Máximo de Usuários</Label>
               <Input
-                id="maxUsers"
+                id="max-users"
                 type="number"
-                value={formData.maxUsers}
-                onChange={(e) => handleInputChange('maxUsers', parseInt(e.target.value))}
+                value={formData.max_users}
+                onChange={(e) => handleInputChange('max_users', parseInt(e.target.value))}
+                placeholder="15"
+                disabled={loading}
                 min="1"
                 max="1000"
               />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="maxStorageGB">Armazenamento (GB)</Label>
+              <Label htmlFor="max-storage">Armazenamento (GB)</Label>
               <Input
-                id="maxStorageGB"
+                id="max-storage"
                 type="number"
                 step="0.1"
-                value={formData.maxStorageGB}
-                onChange={(e) => handleInputChange('maxStorageGB', parseFloat(e.target.value))}
+                value={formData.max_storage_gb}
+                onChange={(e) => handleInputChange('max_storage_gb', parseFloat(e.target.value))}
+                placeholder="0.5"
+                disabled={loading}
                 min="0.1"
                 max="100"
               />
             </div>
           </div>
 
-          <DialogFooter>
+          <div className="flex justify-end space-x-2 pt-4">
             <Button
               type="button"
-              onClick={() => setOpen(false)}
+              variant="outline"
+              onClick={() => onOpenChange(false)}
               disabled={loading}
             >
               Cancelar
@@ -213,11 +221,11 @@ const CreateOrganizationDialog: React.FC<CreateOrganizationDialogProps> = ({ onO
                 'Criar Organização'
               )}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>
-  )
-}
+  );
+};
 
-export default CreateOrganizationDialog 
+export default CreateOrganizationDialog;

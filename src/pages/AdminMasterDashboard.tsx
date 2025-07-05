@@ -1,266 +1,266 @@
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  Users, 
-  Building2, 
-  Calendar, 
-  Music,
-  Plus,
-  Search,
-  Settings,
-  BarChart3
-} from 'lucide-react';
-import AppLayout from '@/components/layout/AppLayout';
+import { useAuth } from '@/contexts/AuthContext';
 import { UserService } from '@/integrations/supabase/services/userService';
 import { OrganizationService } from '@/integrations/supabase/services/organizationService';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Users, Building2, TrendingUp, Clock, Plus, Settings } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+import CreateOrganizationDialog from '@/components/CreateOrganizationDialog';
 
 const AdminMasterDashboard = () => {
+  const { user, isAdminMaster, logout } = useAuth();
   const [stats, setStats] = useState({
-    totalUsers: 0,
-    totalOrganizations: 0,
-    pendingUsers: 0,
-    activeOrganizations: 0
+    users: { total: 0, pending: 0, admins: 0, recent: 0 },
+    organizations: { total: 0, active: 0, free: 0, premium: 0, recent: 0 }
   });
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadStats();
-  }, []);
+  const [showCreateOrg, setShowCreateOrg] = useState(false);
 
   const loadStats = async () => {
+    if (!isAdminMaster) {
+      console.log('Usuário não é admin master, pulando carregamento de estatísticas')
+      setLoading(false);
+      return;
+    }
+
     try {
-      const userStats = await UserService.getUserStats();
-      const organizationStats = await OrganizationService.getOrganizationStats();
+      console.log('Carregando estatísticas do admin master...');
       
+      // Carregar estatísticas dos usuários (protegido por RLS)
+      let userStats = { total: 0, pending: 0, admins: 0, recent: 0 };
+      try {
+        userStats = await UserService.getUserStats();
+        console.log('Estatísticas de usuários carregadas:', userStats);
+      } catch (error) {
+        console.error('Erro ao carregar estatísticas de usuários:', error);
+        // Para admin masters, este erro pode significar que não há dados ainda
+      }
+
+      // Carregar estatísticas das organizações
+      let orgStats = { total: 0, active: 0, free: 0, premium: 0, recent: 0 };
+      try {
+        orgStats = await OrganizationService.getOrganizationStats();
+        console.log('Estatísticas de organizações carregadas:', orgStats);
+      } catch (error) {
+        console.error('Erro ao carregar estatísticas de organizações:', error);
+      }
+
       setStats({
-        totalUsers: userStats.total,
-        totalOrganizations: organizationStats.total,
-        pendingUsers: userStats.pending,
-        activeOrganizations: organizationStats.active
+        users: userStats,
+        organizations: orgStats
       });
+
     } catch (error) {
       console.error('Erro ao carregar estatísticas:', error);
+      toast({
+        title: "Aviso",
+        description: "Algumas estatísticas podem não estar disponíveis ainda.",
+        variant: "default",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) {
+  useEffect(() => {
+    loadStats();
+  }, [isAdminMaster]);
+
+  const handleCreateOrganization = () => {
+    loadStats(); // Recarregar estatísticas após criar
+    setShowCreateOrg(false);
+  };
+
+  if (!isAdminMaster) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Carregando dashboard...</p>
-          </div>
-        </div>
-      </AppLayout>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <Card className="w-full max-w-md mx-4">
+          <CardHeader className="text-center">
+            <CardTitle className="text-red-600">Acesso Negado</CardTitle>
+            <CardDescription>
+              Você não tem permissão para acessar o painel de administração master.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <Button onClick={logout} variant="outline">
+              Voltar ao Login
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Admin Master</h1>
-            <p className="text-gray-600 mt-1">Painel de controle geral do sistema</p>
+            <h1 className="text-3xl font-bold text-gray-900">Painel Admin Master</h1>
+            <p className="text-gray-600 mt-2">
+              Bem-vindo, {user?.name}! Gerencie todas as organizações do sistema.
+            </p>
           </div>
-          <Badge variant="default" className="bg-purple-100 text-purple-800">
-            Super Admin
+          <div className="flex gap-2">
+            <Button onClick={() => setShowCreateOrg(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Nova Organização
+            </Button>
+            <Button variant="outline" onClick={logout}>
+              <Settings className="w-4 h-4 mr-2" />
+              Sair
+            </Button>
+          </div>
+        </div>
+
+        {/* Status Badge */}
+        <div className="mb-6">
+          <Badge variant="secondary" className="bg-purple-100 text-purple-800">
+            🛡️ Admin Master - Acesso Total
           </Badge>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total de Usuários</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalUsers}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.pendingUsers} pendentes
-              </p>
-            </CardContent>
-          </Card>
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => (
+              <Card key={i} className="animate-pulse">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <div className="h-4 bg-gray-200 rounded w-20"></div>
+                  <div className="h-4 w-4 bg-gray-200 rounded"></div>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
+                  <div className="h-3 bg-gray-200 rounded w-24"></div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <>
+            {/* Cards de Estatísticas */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total de Usuários</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.users.total}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {stats.users.recent} novos este mês
+                  </p>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Organizações</CardTitle>
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalOrganizations}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.activeOrganizations} ativas
-              </p>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Organizações</CardTitle>
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.organizations.total}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {stats.organizations.active} ativas
+                  </p>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Eventos</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">0</div>
-              <p className="text-xs text-muted-foreground">
-                Este mês
-              </p>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Usuários Pendentes</CardTitle>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.users.pending}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Aguardando aprovação
+                  </p>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Músicas</CardTitle>
-              <Music className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">0</div>
-              <p className="text-xs text-muted-foreground">
-                No sistema
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Planos Premium</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.organizations.premium}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {stats.organizations.free} gratuitos
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="organizations" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="organizations">Organizações</TabsTrigger>
-            <TabsTrigger value="users">Usuários</TabsTrigger>
-            <TabsTrigger value="system">Sistema</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="organizations" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Gerenciar Organizações</CardTitle>
-                    <CardDescription>
-                      Visualize e gerencie todas as organizações do sistema
-                    </CardDescription>
+            {/* Seções Detalhadas */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Resumo do Sistema</CardTitle>
+                  <CardDescription>
+                    Visão geral da plataforma Church Manager
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Administradores</span>
+                    <Badge variant="secondary">{stats.users.admins}</Badge>
                   </div>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nova Organização
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Organizações Recentes</span>
+                    <Badge variant="secondary">{stats.organizations.recent}</Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Planos Básicos</span>
+                    <Badge variant="secondary">
+                      {stats.organizations.total - stats.organizations.free - stats.organizations.premium}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Ações Rápidas</CardTitle>
+                  <CardDescription>
+                    Gerenciar organizações e usuários
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button 
+                    className="w-full justify-start" 
+                    variant="outline"
+                    onClick={() => setShowCreateOrg(true)}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Criar Nova Organização
                   </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex gap-4">
-                    <div className="flex-1">
-                      <Label htmlFor="search">Pesquisar</Label>
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                        <Input
-                          id="search"
-                          placeholder="Digite o nome da organização..."
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="text-center py-12 text-gray-500">
-                    <Building2 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p>Nenhuma organização cadastrada ainda</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="users" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Gerenciar Usuários</CardTitle>
-                    <CardDescription>
-                      Visualize e gerencie todos os usuários do sistema
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex gap-4">
-                    <div className="flex-1">
-                      <Label htmlFor="user-search">Pesquisar</Label>
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                        <Input
-                          id="user-search"
-                          placeholder="Digite o nome ou email do usuário..."
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="text-center py-12 text-gray-500">
-                    <Users className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p>Carregando usuários...</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="system" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Configurações do Sistema</CardTitle>
-                <CardDescription>
-                  Configure parâmetros globais do sistema
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg">Planos de Assinatura</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <Button variant="outline" className="w-full">
-                          <Settings className="h-4 w-4 mr-2" />
-                          Configurar Planos
-                        </Button>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg">Relatórios</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <Button variant="outline" className="w-full">
-                          <BarChart3 className="h-4 w-4 mr-2" />
-                          Ver Relatórios
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                  <Button className="w-full justify-start" variant="outline">
+                    <Users className="w-4 h-4 mr-2" />
+                    Gerenciar Usuários
+                  </Button>
+                  <Button className="w-full justify-start" variant="outline">
+                    <Building2 className="w-4 h-4 mr-2" />
+                    Ver Todas Organizações
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        )}
       </div>
-    </AppLayout>
+
+      {/* Dialog para criar organização */}
+      <CreateOrganizationDialog
+        open={showCreateOrg}
+        onOpenChange={setShowCreateOrg}
+        onOrganizationCreated={handleCreateOrganization}
+      />
+    </div>
   );
 };
 
