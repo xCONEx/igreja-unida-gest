@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 // Pages
 import LandingPage from '@/pages/LandingPage';
 import Login from '@/pages/Login';
+import AuthCallback from '@/pages/AuthCallback';
 import Dashboard from '@/pages/Dashboard';
 import AdminMasterDashboard from '@/pages/AdminMasterDashboard';
 import Teams from '@/pages/Teams';
@@ -70,6 +71,7 @@ function AppRoutes() {
           {/* Public Routes */}
           <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/dashboard" />} />
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
           
           {/* Admin Master Routes */}
           <Route 
