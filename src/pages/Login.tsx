@@ -20,7 +20,7 @@ const Login = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('login');
   const navigate = useNavigate();
-  const { user, login } = useAuth();
+  const { user, login, loginWithGoogle } = useAuth();
 
   useEffect(() => {
     if (user) {
@@ -70,9 +70,15 @@ const Login = () => {
   const handleGoogleAuth = async () => {
     setGoogleLoading(true);
     try {
+      await loginWithGoogle();
       toast({
-        title: "Login com Google não disponível",
-        description: "Use seu email e senha para fazer login.",
+        title: "Login com Google iniciado",
+        description: "Redirecionando para o Google...",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erro no login com Google",
+        description: error.message || "Não foi possível fazer login com Google",
         variant: "destructive",
       });
     } finally {

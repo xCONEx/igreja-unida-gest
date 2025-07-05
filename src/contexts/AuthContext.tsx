@@ -1,13 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { UserService, ApplicationUser } from '../integrations/supabase/services/userService'
 import { OrganizationService, Organization } from '../integrations/supabase/services/organizationService'
+import { supabase } from '../integrations/supabase/client'
 
 interface AuthContextType {
   user: ApplicationUser | null
   organization: Organization | null
   isAdminMaster: boolean
   isLoading: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password?: string) => Promise<void>
+  loginWithGoogle: () => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
 }
@@ -26,11 +28,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Verificar se é admin master (email específico)
   const checkAdminMaster = (email: string) => {
-    const adminEmails = ['admin@igrejaunida.com', 'master@igrejaunida.com']
+    const adminEmails = ['yuriadrskt@gmail.com', 'admin@igrejaunida.com', 'master@igrejaunida.com']
     return adminEmails.includes(email.toLowerCase())
   }
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password?: string) => {
     try {
       setIsLoading(true)
       
@@ -38,7 +40,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const userData = await UserService.getUserByEmail(email)
       
       if (!userData) {
-        throw new Error('Usuário não encontrado')
+        throw new Error('Usuário não encontrado. Entre em contato com o administrador.')
+      }
+
+      // Se for login com senha, verificar se a senha está correta
+      if (password && password !== '') {
+        // Aqui você pode implementar verificação de senha se necessário
+        // Por enquanto, vamos aceitar qualquer senha para usuários existentes
+        console.log('Login com senha para:', email)
       }
 
       // Verificar se é admin master
@@ -75,6 +84,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     } catch (error) {
       console.error('Erro no login:', error)
+      throw error
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const loginWithGoogle = async () => {
+    try {
+      setIsLoading(true)
+      
+      // Iniciar login com Google via Supabase
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`
+        }
+      })
+
+      if (error) {
+        throw new Error(error.message)
+      }
+
+      // O redirecionamento será tratado no callback
+      console.log('Login com Google iniciado:', data)
+
+    } catch (error) {
+      console.error('Erro no login com Google:', error)
       throw error
     } finally {
       setIsLoading(false)
@@ -128,6 +164,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAdminMaster,
     isLoading,
     login,
+    loginWithGoogle,
     logout,
     refreshUser
   }
