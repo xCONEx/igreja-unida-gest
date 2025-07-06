@@ -17,7 +17,7 @@ const AdminMasterDashboard = () => {
   const { user, isAdminMaster, logout } = useAuth();
   const [stats, setStats] = useState({
     users: { total: 0, pending: 0, admins: 0, recent: 0 },
-    organizations: { total: 0, active: 0, free: 0, premium: 0, recent: 0 }
+    organizations: { total: 0, active: 0, free: 0, basic: 0, premium: 0, recent: 0 }
   });
   const [loading, setLoading] = useState(true);
   const [hasPermissionError, setHasPermissionError] = useState(false);
@@ -49,7 +49,7 @@ const AdminMasterDashboard = () => {
       }
 
       // Carregar estatísticas das organizações
-      let orgStats = { total: 0, active: 0, free: 0, premium: 0, recent: 0 };
+      let orgStats = { total: 0, active: 0, free: 0, basic: 0, premium: 0, recent: 0 };
       try {
         orgStats = await OrganizationService.getOrganizationStats();
         console.log('Estatísticas de organizações carregadas:', orgStats);
@@ -235,9 +235,7 @@ const AdminMasterDashboard = () => {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">Planos Básicos</span>
-                    <Badge variant="secondary">
-                      {stats.organizations.total - stats.organizations.free - stats.organizations.premium}
-                    </Badge>
+                    <Badge variant="secondary">{stats.organizations.basic}</Badge>
                   </div>
                   {hasPermissionError && (
                     <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded">

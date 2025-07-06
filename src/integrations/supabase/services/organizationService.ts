@@ -99,6 +99,7 @@ export class OrganizationService {
       total: organizations?.length || 0,
       active: organizations?.length || 0, // Assumindo que todas são ativas por enquanto
       free: organizations?.filter(org => org.subscription_plan === 'Free').length || 0,
+      basic: organizations?.filter(org => org.subscription_plan === 'Basic').length || 0,
       premium: organizations?.filter(org => org.subscription_plan === 'Premium').length || 0,
       recent: organizations?.filter(org => {
         const createdDate = new Date(org.created_at)

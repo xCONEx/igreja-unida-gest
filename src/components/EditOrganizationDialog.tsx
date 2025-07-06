@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,42 +13,50 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Mail } from 'lucide-react';
+import { Loader2, Building2 } from 'lucide-react';
+import { Organization } from '@/integrations/supabase/services/organizationService';
 
-interface CreateOrganizationDialogProps {
+interface EditOrganizationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onOrganizationCreated: () => void;
+  onOrganizationUpdated: () => void;
+  organization: Organization | null;
 }
 
-const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }: CreateOrganizationDialogProps) => {
+const EditOrganizationDialog = ({ open, onOpenChange, onOrganizationUpdated, organization }: EditOrganizationDialogProps) => {
   const [formData, setFormData] = useState({
     name: '',
-    adminEmail: '',
-    adminName: '',
     subscription_plan: 'Free' as 'Free' | 'Basic' | 'Premium',
     max_users: 50,
   });
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (organization) {
+      setFormData({
+        name: organization.name,
+        subscription_plan: organization.subscription_plan as 'Free' | 'Basic' | 'Premium',
+        max_users: organization.max_users,
+      });
+    }
+  }, [organization]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.adminEmail) {
+    if (!formData.name) {
       toast({
-        title: "Campos obrigatórios",
-        description: "Nome da organização e email do administrador são obrigatórios.",
+        title: "Campo obrigatório",
+        description: "Nome da organização é obrigatório.",
         variant: "destructive",
       });
       return;
     }
 
-    // Validar formato do email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.adminEmail)) {
+    if (!organization) {
       toast({
-        title: "Email inválido",
-        description: "Por favor, insira um email válido.",
+        title: "Erro",
+        description: "Organização não encontrada.",
         variant: "destructive",
       });
       return;
@@ -57,78 +65,31 @@ const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }:
     setLoading(true);
     
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('Usuário não autenticado');
-      }
-
-      // Criar a organização primeiro (com owner_id temporário)
-      const { data: organization, error: orgError } = await supabase
+      const { error } = await supabase
         .from('organizations')
-        .insert({
+        .update({
           name: formData.name,
-          owner_id: 1, // Temporário, será atualizado depois
           subscription_plan: formData.subscription_plan,
           max_users: formData.max_users,
         })
-        .select()
-        .single();
-
-      if (orgError) {
-        throw orgError;
-      }
-
-      // Criar o usuário admin na tabela application_users
-      const { data: appUser, error: userError } = await supabase
-        .from('application_users')
-        .insert({
-          email: formData.adminEmail,
-          name: formData.adminName || formData.adminEmail,
-          organization_id: organization.id,
-          is_admin: true,
-          can_add_people: true,
-          can_organize_events: true,
-          can_manage_media: true,
-          pending: false,
-          profile_url: null,
-        })
-        .select()
-        .single();
-
-      if (userError) {
-        throw userError;
-      }
-
-      // Atualizar a organização com o owner_id correto
-      const { error: updateError } = await supabase
-        .from('organizations')
-        .update({ owner_id: appUser.id })
         .eq('id', organization.id);
 
-      if (updateError) {
-        console.warn('Erro ao atualizar owner:', updateError);
+      if (error) {
+        throw error;
       }
 
       toast({
-        title: "Organização criada com sucesso!",
-        description: `${organization.name} foi criada. O administrador (${formData.adminEmail}) pode fazer login no sistema.`,
+        title: "Organização atualizada!",
+        description: `${formData.name} foi atualizada com sucesso.`,
       });
 
-      setFormData({
-        name: '',
-        adminEmail: '',
-        adminName: '',
-        subscription_plan: 'Free',
-        max_users: 50,
-      });
-
-      onOrganizationCreated();
+      onOrganizationUpdated();
       onOpenChange(false);
       
     } catch (error: any) {
-      console.error('Erro ao criar organização:', error);
+      console.error('Erro ao atualizar organização:', error);
       toast({
-        title: "Erro ao criar organização",
+        title: "Erro ao atualizar organização",
         description: error.message || "Tente novamente mais tarde.",
         variant: "destructive",
       });
@@ -166,9 +127,12 @@ const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }:
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Criar Nova Organização</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Building2 className="w-5 h-5" />
+            Editar Organização
+          </DialogTitle>
           <DialogDescription>
-            Preencha os dados da nova organização e do administrador responsável.
+            Atualize os dados da organização selecionada.
           </DialogDescription>
         </DialogHeader>
         
@@ -182,39 +146,6 @@ const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }:
               placeholder="Nome da organização"
               disabled={loading}
             />
-          </div>
-
-          <div className="space-y-4 p-4 bg-blue-50 rounded-lg">
-            <div className="flex items-center gap-2 text-blue-800">
-              <Mail className="w-4 h-4" />
-              <h3 className="font-medium">Dados do Administrador</h3>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="admin-email">Email do Administrador *</Label>
-              <Input
-                id="admin-email"
-                type="email"
-                value={formData.adminEmail}
-                onChange={(e) => handleInputChange('adminEmail', e.target.value)}
-                placeholder="admin@exemplo.com"
-                disabled={loading}
-              />
-              <p className="text-xs text-gray-600">
-                Esta pessoa será o administrador principal da organização
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="admin-name">Nome do Administrador</Label>
-              <Input
-                id="admin-name"
-                value={formData.adminName}
-                onChange={(e) => handleInputChange('adminName', e.target.value)}
-                placeholder="Nome completo (opcional)"
-                disabled={loading}
-              />
-            </div>
           </div>
 
           <div className="space-y-2">
@@ -264,10 +195,10 @@ const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }:
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Criando...
+                  Salvando...
                 </>
               ) : (
-                'Criar Organização'
+                'Salvar Alterações'
               )}
             </Button>
           </div>
@@ -277,4 +208,4 @@ const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }:
   );
 };
 
-export default CreateOrganizationDialog;
+export default EditOrganizationDialog;
