@@ -91,29 +91,42 @@ export class OrganizationService {
 
   // Buscar estatísticas das organizações
   static async getOrganizationStats() {
-    const { data: organizations, error } = await supabase
-      .from('organizations')
-      .select('subscription_plan, created_at')
+    try {
+      const { data: organizations, error } = await supabase
+        .from('organizations')
+        .select('subscription_plan, created_at')
 
-    if (error) {
-      console.error('Erro ao buscar estatísticas das organizações:', error)
-      throw new Error(`Erro ao buscar estatísticas das organizações: ${error.message}`)
+      if (error) {
+        console.error('Erro ao buscar estatísticas das organizações:', error)
+        throw new Error(`Erro ao buscar estatísticas das organizações: ${error.message}`)
+      }
+
+      const stats = {
+        total: organizations?.length || 0,
+        active: organizations?.length || 0, // Assumindo que todas são ativas por enquanto
+        free: organizations?.filter(org => org.subscription_plan === 'Free').length || 0,
+        basic: organizations?.filter(org => org.subscription_plan === 'Basic').length || 0,
+        premium: organizations?.filter(org => org.subscription_plan === 'Premium').length || 0,
+        recent: organizations?.filter(org => {
+          const createdDate = new Date(org.created_at)
+          const thirtyDaysAgo = new Date()
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+          return createdDate >= thirtyDaysAgo
+        }).length || 0
+      }
+
+      return stats
+    } catch (error: any) {
+      console.error('Erro nas estatísticas das organizações:', error)
+      // Retornar estatísticas vazias em caso de erro para não quebrar a UI
+      return {
+        total: 0,
+        active: 0,
+        free: 0,
+        basic: 0,
+        premium: 0,
+        recent: 0
+      }
     }
-
-    const stats = {
-      total: organizations?.length || 0,
-      active: organizations?.length || 0, // Assumindo que todas são ativas por enquanto
-      free: organizations?.filter(org => org.subscription_plan === 'Free').length || 0,
-      basic: organizations?.filter(org => org.subscription_plan === 'Basic').length || 0,
-      premium: organizations?.filter(org => org.subscription_plan === 'Premium').length || 0,
-      recent: organizations?.filter(org => {
-        const createdDate = new Date(org.created_at)
-        const thirtyDaysAgo = new Date()
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-        return createdDate >= thirtyDaysAgo
-      }).length || 0
-    }
-
-    return stats
   }
 }

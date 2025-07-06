@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -62,7 +61,7 @@ const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }:
         throw new Error('Usuário não autenticado');
       }
 
-      // Criar a organização primeiro (com owner_id temporário e max_storage_gb padrão)
+      // Criar a organização primeiro (com owner_id temporário)
       const { data: organization, error: orgError } = await supabase
         .from('organizations')
         .insert({
@@ -70,7 +69,7 @@ const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }:
           owner_id: 1, // Temporário, será atualizado depois
           subscription_plan: formData.subscription_plan,
           max_users: formData.max_users,
-          max_storage_gb: 10, // Valor padrão temporário para compatibilidade com tipos
+          max_storage_gb: 10, // Valor padrão
         })
         .select()
         .single();
