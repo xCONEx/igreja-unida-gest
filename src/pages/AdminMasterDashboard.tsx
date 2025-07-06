@@ -6,7 +6,8 @@ import { OrganizationService } from '@/integrations/supabase/services/organizati
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, Building2, TrendingUp, Clock, Plus, Settings } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Users, Building2, TrendingUp, Clock, Plus, Settings, AlertCircle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import CreateOrganizationDialog from '@/components/CreateOrganizationDialog';
 import ManageUsersDialog from '@/components/ManageUsersDialog';
@@ -19,28 +20,32 @@ const AdminMasterDashboard = () => {
     organizations: { total: 0, active: 0, free: 0, premium: 0, recent: 0 }
   });
   const [loading, setLoading] = useState(true);
+  const [hasPermissionError, setHasPermissionError] = useState(false);
   const [showCreateOrg, setShowCreateOrg] = useState(false);
   const [showManageUsers, setShowManageUsers] = useState(false);
   const [showViewOrganizations, setShowViewOrganizations] = useState(false);
 
   const loadStats = async () => {
     if (!isAdminMaster) {
-      console.log('Usuário não é admin master, pulando carregamento de estatísticas')
+      console.log('Usuário não é admin master, pulando carregamento de estatísticas');
       setLoading(false);
       return;
     }
 
     try {
       console.log('Carregando estatísticas do admin master...');
+      setHasPermissionError(false);
       
       // Carregar estatísticas dos usuários (protegido por RLS)
       let userStats = { total: 0, pending: 0, admins: 0, recent: 0 };
       try {
         userStats = await UserService.getUserStats();
         console.log('Estatísticas de usuários carregadas:', userStats);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erro ao carregar estatísticas de usuários:', error);
-        // Para admin masters, este erro pode significar que não há dados ainda
+        if (error.message?.includes('permission denied')) {
+          setHasPermissionError(true);
+        }
       }
 
       // Carregar estatísticas das organizações
@@ -48,8 +53,11 @@ const AdminMasterDashboard = () => {
       try {
         orgStats = await OrganizationService.getOrganizationStats();
         console.log('Estatísticas de organizações carregadas:', orgStats);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erro ao carregar estatísticas de organizações:', error);
+        if (error.message?.includes('permission denied')) {
+          setHasPermissionError(true);
+        }
       }
 
       setStats({
@@ -59,11 +67,7 @@ const AdminMasterDashboard = () => {
 
     } catch (error) {
       console.error('Erro ao carregar estatísticas:', error);
-      toast({
-        title: "Aviso",
-        description: "Algumas estatísticas podem não estar disponíveis ainda.",
-        variant: "default",
-      });
+      setHasPermissionError(true);
     } finally {
       setLoading(false);
     }
@@ -127,6 +131,17 @@ const AdminMasterDashboard = () => {
             🛡️ Admin Master - Acesso Total
           </Badge>
         </div>
+
+        {/* Permission Error Alert */}
+        {hasPermissionError && (
+          <Alert className="mb-6 border-orange-200 bg-orange-50">
+            <AlertCircle className="h-4 w-4 text-orange-600" />
+            <AlertDescription className="text-orange-800">
+              <strong>Aviso:</strong> Algumas estatísticas podem não estar disponíveis devido a configurações de permissão. 
+              As funcionalidades principais ainda estão operacionais.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -215,7 +230,7 @@ const AdminMasterDashboard = () => {
                     <Badge variant="secondary">{stats.users.admins}</Badge>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Organizações Recentes</span>
+                    <span className="text-sm font-medium">Org. Recentes</span>
                     <Badge variant="secondary">{stats.organizations.recent}</Badge>
                   </div>
                   <div className="flex justify-between items-center">
@@ -224,6 +239,11 @@ const AdminMasterDashboard = () => {
                       {stats.organizations.total - stats.organizations.free - stats.organizations.premium}
                     </Badge>
                   </div>
+                  {hasPermissionError && (
+                    <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded">
+                      * Alguns dados podem estar limitados
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

@@ -4,7 +4,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog,
@@ -14,7 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Mail } from 'lucide-react';
 
 interface CreateOrganizationDialogProps {
   open: boolean;
@@ -25,6 +24,8 @@ interface CreateOrganizationDialogProps {
 const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }: CreateOrganizationDialogProps) => {
   const [formData, setFormData] = useState({
     name: '',
+    adminEmail: '',
+    adminName: '',
     subscription_plan: 'Free' as 'Free' | 'Basic' | 'Premium',
     max_users: 15,
     max_storage_gb: 0.5,
@@ -34,10 +35,21 @@ const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }:
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name) {
+    if (!formData.name || !formData.adminEmail) {
       toast({
-        title: "Campo obrigatório",
-        description: "Nome da organização é obrigatório.",
+        title: "Campos obrigatórios",
+        description: "Nome da organização e email do administrador são obrigatórios.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validar formato do email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.adminEmail)) {
+      toast({
+        title: "Email inválido",
+        description: "Por favor, insira um email válido.",
         variant: "destructive",
       });
       return;
@@ -72,15 +84,15 @@ const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }:
       const { data: appUser, error: userError } = await supabase
         .from('application_users')
         .insert({
-          email: user.email!,
-          name: user.user_metadata?.full_name || user.email!,
+          email: formData.adminEmail,
+          name: formData.adminName || formData.adminEmail,
           organization_id: organization.id,
           is_admin: true,
           can_add_people: true,
           can_organize_events: true,
           can_manage_media: true,
           pending: false,
-          profile_url: user.user_metadata?.avatar_url || null,
+          profile_url: null,
         })
         .select()
         .single();
@@ -101,17 +113,20 @@ const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }:
 
       toast({
         title: "Organização criada com sucesso!",
-        description: `${organization.name} foi criada e você é o administrador.`,
+        description: `${organization.name} foi criada. O administrador (${formData.adminEmail}) pode fazer login no sistema.`,
       });
 
       setFormData({
         name: '',
+        adminEmail: '',
+        adminName: '',
         subscription_plan: 'Free',
         max_users: 15,
         max_storage_gb: 0.5,
       });
 
       onOrganizationCreated();
+      onOpenChange(false);
       
     } catch (error: any) {
       console.error('Erro ao criar organização:', error);
@@ -134,11 +149,11 @@ const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Criar Nova Organização</DialogTitle>
           <DialogDescription>
-            Preencha os dados da nova organização. Você será o administrador.
+            Preencha os dados da nova organização e do administrador responsável.
           </DialogDescription>
         </DialogHeader>
         
@@ -152,6 +167,39 @@ const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }:
               placeholder="Nome da organização"
               disabled={loading}
             />
+          </div>
+
+          <div className="space-y-4 p-4 bg-blue-50 rounded-lg">
+            <div className="flex items-center gap-2 text-blue-800">
+              <Mail className="w-4 h-4" />
+              <h3 className="font-medium">Dados do Administrador</h3>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="admin-email">Email do Administrador *</Label>
+              <Input
+                id="admin-email"
+                type="email"
+                value={formData.adminEmail}
+                onChange={(e) => handleInputChange('adminEmail', e.target.value)}
+                placeholder="admin@exemplo.com"
+                disabled={loading}
+              />
+              <p className="text-xs text-gray-600">
+                Esta pessoa será o administrador principal da organização
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="admin-name">Nome do Administrador</Label>
+              <Input
+                id="admin-name"
+                value={formData.adminName}
+                onChange={(e) => handleInputChange('adminName', e.target.value)}
+                placeholder="Nome completo (opcional)"
+                disabled={loading}
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -179,7 +227,7 @@ const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }:
                 id="max-users"
                 type="number"
                 value={formData.max_users}
-                onChange={(e) => handleInputChange('max_users', parseInt(e.target.value))}
+                onChange={(e) => handleInputChange('max_users', parseInt(e.target.value) || 15)}
                 placeholder="15"
                 disabled={loading}
                 min="1"
@@ -193,7 +241,7 @@ const CreateOrganizationDialog = ({ open, onOpenChange, onOrganizationCreated }:
                 type="number"
                 step="0.1"
                 value={formData.max_storage_gb}
-                onChange={(e) => handleInputChange('max_storage_gb', parseFloat(e.target.value))}
+                onChange={(e) => handleInputChange('max_storage_gb', parseFloat(e.target.value) || 0.5)}
                 placeholder="0.5"
                 disabled={loading}
                 min="0.1"
