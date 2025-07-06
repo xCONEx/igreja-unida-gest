@@ -39,10 +39,15 @@ export class OrganizationService {
   }
 
   // Criar nova organização
-  static async createOrganization(organization: OrganizationInsert): Promise<Organization> {
+  static async createOrganization(organization: Omit<OrganizationInsert, 'max_storage_gb'> & { max_storage_gb?: number }): Promise<Organization> {
+    const organizationData: OrganizationInsert = {
+      ...organization,
+      max_storage_gb: organization.max_storage_gb || 10 // Valor padrão
+    }
+
     const { data, error } = await supabase
       .from('organizations')
-      .insert(organization)
+      .insert(organizationData)
       .select()
       .single()
 
@@ -55,7 +60,7 @@ export class OrganizationService {
   }
 
   // Atualizar organização
-  static async updateOrganization(id: number, updates: OrganizationUpdate): Promise<Organization> {
+  static async updateOrganization(id: number, updates: Partial<OrganizationUpdate>): Promise<Organization> {
     const { data, error } = await supabase
       .from('organizations')
       .update(updates)
